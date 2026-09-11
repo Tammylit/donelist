@@ -190,6 +190,20 @@ body {
   font-size:.75rem; color:var(--muted-color); letter-spacing:1.5px; font-weight:600;
 }
 .panel .tip { font-size:.68rem; color:#9ca3af; margin-top:4px; line-height:1.5; }
+.project-list { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+.project-row { display:flex; align-items:center; gap:5px; }
+.project-row input { flex:1; min-width:0; }
+.project-row button {
+  width:32px; height:36px; padding:0; border:1px solid #d1d5db; border-radius:8px;
+  background:#fff; color:#6b7280; font-family:var(--font-main); cursor:pointer;
+}
+.project-row button:disabled { opacity:.35; cursor:not-allowed; }
+.project-row .delete-project { color:#ef4444; }
+.project-add-btn {
+  width:100%; margin-top:8px; padding:10px; border:1px dashed #9ca3af;
+  border-radius:8px; background:transparent; color:var(--muted-color);
+  font-family:var(--font-main); cursor:pointer;
+}
 
 .toast {
   position:fixed; top:20px; left:50%;
@@ -275,6 +289,11 @@ body {
 
   <div class="panel" id="customPanel">
     <h3>自定义小票</h3>
+    <div class="section-title" style="margin-top:0;border-top:none;padding-top:0;">项目栏</div>
+    <div class="project-list" id="projectList"></div>
+    <button class="project-add-btn" id="addProjectBtn">＋ 添加项目</button>
+    <div class="tip">可直接修改项目名称，也可以用箭头调整顺序。</div>
+
     <label>标题文字</label>
     <input type="text" id="cfgTitle" maxlength="20" placeholder="今日小票">
     <label>底部感谢语</label>
@@ -436,6 +455,8 @@ body {
   const importFile = $('importFile');
   const customBtn = $('customBtn');
   const customPanel = $('customPanel');
+  const projectListEl = $('projectList');
+  const addProjectBtn = $('addProjectBtn');
   const prevDayBtn = $('prevDayBtn');
   const nextDayBtn = $('nextDayBtn');
   const toastEl = $('toast');
@@ -630,6 +651,7 @@ body {
     nextDayBtn.disabled = (viewDate >= logicalDateStr());
 
     applyTheme();
+    renderProjectManager();
   }
 
   function applyTheme(){
@@ -817,7 +839,88 @@ body {
   }
 
   // ========== 自定义面板 ==========
+  function renderProjectManager(){
+    const readonly = !isTodayView();
+    if(tasks.length === 0){
+      projectListEl.innerHTML = '<div class="tip">当前没有项目</div>';
+    } else {
+      projectListEl.innerHTML = tasks.map((task, index)=>`
+        <div class="project-row" data-id="${task.id}">
+          <input type="text" value="${escapeHtml(task.text)}" maxlength="60" ${readonly?'disabled':''}>
+          <button type="button" data-action="up" title="上移" ${readonly || index === 0?'disabled':''}>↑</button>
+          <button type="button" data-action="down" title="下移" ${readonly || index === tasks.length - 1?'disabled':''}>↓</button>
+          <button type="button" class="delete-project" data-action="delete" title="删除" ${readonly?'disabled':''}>×</button>
+        </div>`).join('');
+    }
+    addProjectBtn.disabled = readonly;
+    addProjectBtn.style.opacity = readonly ? .4 : 1;
+  }
+
+  function addProjectFromPanel(){
+    if(!isTodayView()){ showToast('历史日期不能添加'); return; }
+    const text = prompt('请输入项目名称', '新项目');
+    if(text === null) return;
+    const trimmed = text.trim();
+    if(!trimmed){ showToast('项目名称不能为空'); return; }
+    tasks.push({ id:generateId(), text:trimmed.slice(0,60), completed:false });
+    saveAll();
+    render();
+    renderProjectManager();
+    showToast('项目已添加');
+  }
+
+  function updateProjectFromPanel(id, value){
+    const task = tasks.find(item=>item.id === id);
+    const text = value.trim();
+    if(!task || !text){ return; }
+    task.text = text.slice(0,60);
+    saveAll();
+    render();
+  }
+
+  function moveProject(id, direction){
+    if(!isTodayView()) return;
+    const index = tasks.findIndex(task=>task.id === id);
+    const target = index + direction;
+    if(index < 0 || target < 0 || target >= tasks.length) return;
+    [tasks[index], tasks[target]] = [tasks[target], tasks[index]];
+    saveAll();
+    render();
+    renderProjectManager();
+  }
+
+  function deleteProject(id){
+    if(!isTodayView()) return;
+    const task = tasks.find(item=>item.id === id);
+    if(!task || !confirm(`删除项目“${task.text}”？`)) return;
+    tasks = tasks.filter(item=>item.id !== id);
+    saveAll();
+    render();
+    renderProjectManager();
+    showToast('项目已删除');
+  }
+
+  function setupProjectManager(){
+    projectListEl.addEventListener('click', e=>{
+      const button = e.target.closest('button');
+      if(!button) return;
+      const row = button.closest('.project-row');
+      const action = button.dataset.action;
+      if(action === 'up') moveProject(row.dataset.id, -1);
+      if(action === 'down') moveProject(row.dataset.id, 1);
+      if(action === 'delete') deleteProject(row.dataset.id);
+    });
+    projectListEl.addEventListener('change', e=>{
+      if(e.target.matches('input')){
+        updateProjectFromPanel(e.target.closest('.project-row').dataset.id, e.target.value);
+        renderProjectManager();
+      }
+    });
+    addProjectBtn.addEventListener('click', addProjectFromPanel);
+  }
+
   function loadConfigToPanel(){
+    renderProjectManager();
     $('cfgTitle').value = config.title;
     $('cfgFooter').value = config.footer;
     $('cfgPageBg').value = config.pageBg;
@@ -971,6 +1074,7 @@ body {
     render();
     loadConfigToPanel();
     setupPWA();
+    setupProjectManager();
 
     addTaskBtn.addEventListener('click', addNewTask);
     newTaskInput.addEventListener('keypress', e=>{
