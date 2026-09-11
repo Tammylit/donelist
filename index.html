@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="今日小票">
+<meta name="theme-color" content="#e5e7eb">
+<meta name="description" content="每日完成小票 · 优雅记录每一天">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23fffdf7'/%3E%3Ctext x='50' y='68' font-size='60' text-anchor='middle' font-family='Courier New' fill='%231e293b'%3E%E2%9C%93%3C/text%3E%3C/svg%3E">
+<title>今日完成小票 · 每日总结</title>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+:root {
+  --page-bg: #e5e7eb;
+  --paper-bg: #fffdf7;
+  --title-color: #2c3e50;
+  --text-color: #1e293b;
+  --muted-color: #6b7280;
+  --line-color: #aaa;
+  --accent-color: #1e293b;
+  --done-color: #10b981;
+  --font-main: 'Courier New', Courier, monospace;
+}
+
+body {
+  background: var(--page-bg);
+  font-family: var(--font-main);
+  display:flex; justify-content:center; align-items:flex-start;
+  min-height:100vh;
+  padding:12px 10px 24px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  padding-top: calc(12px + env(safe-area-inset-top));
+  transition: background .2s;
+}
+
+.receipt-container {
+  background: var(--paper-bg);
+  width:100%; max-width:420px;
+  padding:22px 18px 26px;
+  box-shadow: 0 12px 28px rgba(0,0,0,.15), 0 4px 12px rgba(0,0,0,.1);
+  border-radius:2px;
+  position:relative;
+  transition: background .2s;
+}
+
+.receipt-container::before,
+.receipt-container::after {
+  content:''; position:absolute; left:0; right:0; height:6px;
+  background: radial-gradient(circle, var(--paper-bg) 5px, transparent 5px) repeat-x;
+  background-size:16px 16px;
+}
+.receipt-container::before { top:-6px; }
+.receipt-container::after { bottom:-6px; transform:rotate(180deg); }
+
+.header { text-align:center; border-bottom:2px dashed var(--line-color); padding-bottom:12px; margin-bottom:4px; }
+.header h1 {
+  font-size:1.7rem; font-weight:700; letter-spacing:3px;
+  color:var(--title-color); text-transform:uppercase; margin-bottom:6px;
+  transition: color .2s;
+}
+.header .date {
+  font-size:.9rem; color:var(--muted-color); font-weight:500; letter-spacing:1px;
+  display:inline-block; padding:4px 12px; border-radius:20px;
+  background: rgba(0,0,0,.05);
+}
+.history-nav {
+  display:flex; justify-content:space-between; align-items:center;
+  margin-top:8px; gap:8px;
+}
+.history-nav button {
+  background:transparent; border:1px solid var(--line-color); border-radius:20px;
+  padding:4px 12px; font-size:.8rem; color:var(--muted-color);
+  font-family:var(--font-main); cursor:pointer; min-height:32px;
+}
+.history-nav button:disabled { opacity:.3; cursor:not-allowed; }
+.history-nav .today-tag {
+  font-size:.75rem; color:var(--accent-color); font-weight:600;
+}
+
+.subhead {
+  display:flex; justify-content:space-between; font-size:.8rem;
+  color:var(--muted-color); text-transform:uppercase; letter-spacing:1px;
+  margin-top:8px; padding:0 4px;
+}
+
+.task-list {
+  list-style:none; display:flex; flex-direction:column; gap:8px;
+  min-height:160px; max-height:380px; overflow-y:auto; padding-right:2px;
+  -webkit-overflow-scrolling:touch;
+}
+.task-list::-webkit-scrollbar { width:5px; }
+.task-list::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:8px; }
+
+.task-item {
+  display:flex; align-items:center; gap:12px;
+  padding:12px 6px 12px 2px; border-bottom:1px dotted #d1d5db;
+  font-size:1rem; line-height:1.4; min-height:52px;
+}
+.task-check {
+  display:flex; align-items:center; justify-content:center;
+  width:30px; height:30px; background:#e5e7eb; border-radius:50%;
+  font-size:18px; font-weight:bold; color:#1f2937;
+  flex-shrink:0; cursor:pointer; user-select:none;
+  transition:all .15s; border:2px solid #9ca3af; touch-action:manipulation;
+}
+.task-check.completed { background:var(--done-color); border-color:var(--done-color); color:#fff; }
+.task-check:active { transform:scale(.9); }
+.task-text { flex:1; word-break:break-word; color:var(--text-color); font-weight:500; }
+.task-text.completed-text { text-decoration:line-through; color:#9ca3af; font-style:italic; }
+
+.empty-state {
+  text-align:center; color:#9ca3af; padding:36px 16px; font-size:1rem;
+  border:2px dashed #e2e8f0; border-radius:12px; background:rgba(0,0,0,.02);
+}
+
+.summary-line {
+  display:flex; justify-content:space-between; font-size:.95rem;
+  padding:10px 0; border-top:2px dashed var(--line-color);
+  border-bottom:1px dashed #ccc; margin-top:8px;
+  color:var(--text-color); font-weight:600; text-transform:uppercase; letter-spacing:1px;
+}
+.summary-line span:last-child {
+  font-family:var(--font-main); font-weight:700;
+  background:rgba(0,0,0,.05); padding:0 10px; border-radius:4px;
+}
+
+.footer-note {
+  text-align:center; font-size:.75rem; color:var(--muted-color);
+  margin-top:14px; letter-spacing:1.5px;
+  border-top:1px dashed #d1d5db; padding-top:14px; font-style:italic;
+}
+
+.action-bar { display:flex; gap:10px; margin-top:18px; margin-bottom:8px; }
+.btn {
+  flex:1; background:rgba(0,0,0,.04); border:1px solid #d1d5db;
+  padding:14px 8px; border-radius:40px; font-family:var(--font-main);
+  font-weight:600; font-size:.85rem; letter-spacing:1px; color:#1f2937;
+  cursor:pointer; transition:all .15s; display:flex; align-items:center;
+  justify-content:center; gap:6px; min-height:48px; touch-action:manipulation;
+}
+.btn-primary { background:var(--accent-color); color:#f8fafc; border:1px solid var(--accent-color); }
+.btn:active { transform:scale(.97); }
+
+.add-task-area { display:flex; gap:8px; margin-top:14px; }
+.add-task-area input {
+  flex:1; padding:14px 16px; border:1.5px solid #d1d5db;
+  background:#fff; border-radius:40px; font-family:var(--font-main);
+  font-size:1rem; outline:none; min-height:50px; -webkit-appearance:none;
+}
+.add-task-area input:focus { border-color:var(--accent-color); }
+.add-task-area button {
+  background:var(--accent-color); color:#fff; border:none; width:54px;
+  min-height:50px; border-radius:40px; font-size:1.6rem;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; touch-action:manipulation;
+}
+.add-task-area button:active { transform:scale(.95); }
+
+.hint { font-size:.7rem; color:#9ca3af; text-align:center; margin-top:8px; }
+
+.tool-bar { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+.tool-bar .btn { font-size:.75rem; padding:10px 4px; min-height:42px; flex:1 1 30%; }
+
+.panel {
+  margin-top:14px; padding:14px; background:rgba(0,0,0,.03);
+  border-radius:12px; display:none;
+}
+.panel.open { display:block; }
+.panel h3 { font-size:.85rem; margin-bottom:10px; color:var(--muted-color); letter-spacing:1px; }
+.panel label { display:block; font-size:.75rem; color:var(--muted-color); margin-bottom:4px; margin-top:8px; }
+.panel input[type="text"], .panel input[type="color"], .panel input[type="number"], .panel select {
+  width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:8px;
+  font-family:var(--font-main); font-size:.85rem; background:#fff;
+}
+.panel input[type="color"] { padding:2px; height:38px; cursor:pointer; }
+.panel .row2 { display:flex; gap:8px; }
+.panel .row2 > div { flex:1; }
+.panel .save-btn {
+  margin-top:12px; width:100%; padding:12px; border:none; border-radius:40px;
+  background:var(--accent-color); color:#fff; font-family:var(--font-main);
+  font-size:.85rem; font-weight:600; letter-spacing:1px; cursor:pointer;
+}
+.panel .section-title {
+  margin-top:16px; margin-bottom:6px; padding-top:12px;
+  border-top:1px dashed #d1d5db;
+  font-size:.75rem; color:var(--muted-color); letter-spacing:1.5px; font-weight:600;
+}
+.panel .tip { font-size:.68rem; color:#9ca3af; margin-top:4px; line-height:1.5; }
+
+.toast {
+  position:fixed; top:20px; left:50%;
+  transform:translateX(-50%) translateY(-20px);
+  background:#1e293b; color:#fff; padding:12px 24px; border-radius:40px;
+  font-size:.9rem; font-family:-apple-system,'PingFang SC',sans-serif;
+  opacity:0; transition:all .3s; pointer-events:none; z-index:9999;
+  max-width:90vw; text-align:center; box-shadow:0 4px 16px rgba(0,0,0,.2);
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* PWA 安装提示条 */
+.install-banner {
+  display:none;
+  position:fixed; bottom:calc(16px + env(safe-area-inset-bottom)); left:50%;
+  transform:translateX(-50%);
+  background:#1e293b; color:#fff; padding:12px 18px;
+  border-radius:40px; font-family:-apple-system,'PingFang SC',sans-serif;
+  font-size:.85rem; box-shadow:0 8px 24px rgba(0,0,0,.25);
+  z-index:9998; max-width:92vw;
+  display:none; align-items:center; gap:12px;
+}
+.install-banner.show { display:flex; }
+.install-banner button {
+  background:#10b981; color:#fff; border:none; padding:8px 14px;
+  border-radius:20px; font-size:.8rem; font-weight:600; cursor:pointer;
+  font-family:inherit; white-space:nowrap;
+}
+.install-banner .close-x {
+  background:transparent; color:#9ca3af; font-size:1.2rem;
+  padding:0 4px; cursor:pointer; line-height:1;
+}
+
+@media (max-width:360px) {
+  .header h1 { font-size:1.4rem; }
+  .btn { font-size:.78rem; padding:12px 4px; }
+}
+</style>
+</head>
+<body>
+<div class="receipt-container" id="receipt">
+  <div class="header">
+    <h1 id="receiptTitle">今日小票</h1>
+    <div class="date" id="currentDate"></div>
+    <div class="history-nav">
+      <button id="prevDayBtn">◀ 前一天</button>
+      <span class="today-tag" id="viewTag">今天</span>
+      <button id="nextDayBtn">后一天 ▶</button>
+    </div>
+  </div>
+
+  <div class="subhead">
+    <span>项目</span>
+    <span>完成/总计</span>
+  </div>
+
+  <ul class="task-list" id="taskList"></ul>
+
+  <div class="summary-line">
+    <span>已完成</span>
+    <span id="completedCount">0 / 0</span>
+  </div>
+
+  <div class="action-bar">
+    <button class="btn" id="resetBtn">↺ 重置</button>
+    <button class="btn btn-primary" id="copyBtn">📋 复制</button>
+  </div>
+
+  <div class="add-task-area">
+    <input type="text" id="newTaskInput" placeholder="添加新任务..." maxlength="60" autocomplete="off">
+    <button id="addTaskBtn">+</button>
+  </div>
+  <div class="hint" id="resetHint">点击圆圈切换状态 · 历史日期只读</div>
+
+  <div class="tool-bar">
+    <button class="btn" id="saveImgBtn">📸 存图</button>
+    <button class="btn" id="exportBtn">⬇ 导出</button>
+    <button class="btn" id="importBtn">⬆ 导入</button>
+    <button class="btn" id="customBtn">🎨 自定义</button>
+  </div>
+
+  <input type="file" id="importFile" accept=".json" style="display:none">
+
+  <div class="panel" id="customPanel">
+    <h3>自定义小票</h3>
+    <label>标题文字</label>
+    <input type="text" id="cfgTitle" maxlength="20" placeholder="今日小票">
+    <label>底部感谢语</label>
+    <input type="text" id="cfgFooter" maxlength="30" placeholder="THANK YOU">
+    <div class="row2">
+      <div>
+        <label>页面背景</label>
+        <input type="color" id="cfgPageBg">
+      </div>
+      <div>
+        <label>纸张颜色</label>
+        <input type="color" id="cfgPaperBg">
+      </div>
+    </div>
+    <div class="row2">
+      <div>
+        <label>标题颜色</label>
+        <input type="color" id="cfgTitleColor">
+      </div>
+      <div>
+        <label>正文颜色</label>
+        <input type="color" id="cfgTextColor">
+      </div>
+    </div>
+    <div class="row2">
+      <div>
+        <label>完成色</label>
+        <input type="color" id="cfgDoneColor">
+      </div>
+      <div>
+        <label>主按钮色</label>
+        <input type="color" id="cfgAccentColor">
+      </div>
+    </div>
+    <label>字体</label>
+    <select id="cfgFont">
+      <option value="'Courier New', Courier, monospace">等宽 Courier（默认）</option>
+      <option value="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">系统无衬线</option>
+      <option value="'Georgia', 'Songti SC', serif">衬线 Georgia</option>
+      <option value="'Comic Sans MS', 'Chalkboard SE', cursive">手写 Comic</option>
+      <option value="'Helvetica Neue', Arial, sans-serif">Helvetica</option>
+    </select>
+
+    <div class="section-title">⏰ 每日自动重置</div>
+    <div class="row2">
+      <div>
+        <label>重置时间（小时）</label>
+        <select id="cfgResetHour">
+          <option value="0">00:00（午夜）</option>
+          <option value="1">01:00</option>
+          <option value="2">02:00（默认）</option>
+          <option value="3">03:00</option>
+          <option value="4">04:00</option>
+          <option value="5">05:00</option>
+          <option value="6">06:00</option>
+          <option value="7">07:00</option>
+          <option value="8">08:00</option>
+          <option value="9">09:00</option>
+          <option value="10">10:00</option>
+          <option value="11">11:00</option>
+          <option value="12">12:00</option>
+          <option value="13">13:00</option>
+          <option value="14">14:00</option>
+          <option value="15">15:00</option>
+          <option value="16">16:00</option>
+          <option value="17">17:00</option>
+          <option value="18">18:00</option>
+          <option value="19">19:00</option>
+          <option value="20">20:00</option>
+          <option value="21">21:00</option>
+          <option value="22">22:00</option>
+          <option value="23">23:00</option>
+        </select>
+      </div>
+      <div>
+        <label>自动重置</label>
+        <select id="cfgAutoReset">
+          <option value="1">开启</option>
+          <option value="0">关闭</option>
+        </select>
+      </div>
+    </div>
+    <div class="tip">
+      💡 例如设置 02:00，那么在 02:00 之前都算"昨天"，02:00 后才算新的一天。
+      <br>关闭自动重置后，任务会一直保留，需要手动点「重置」清零完成状态。
+    </div>
+
+    <button class="save-btn" id="saveCustomBtn">保存设置</button>
+    <button class="save-btn" id="resetCustomBtn" style="background:transparent;color:#6b7280;border:1px solid #d1d5db;margin-top:8px;">恢复默认</button>
+  </div>
+
+  <div class="footer-note">
+    *** 每日完成小票 ***<br>
+    <span style="letter-spacing:3px;" id="footerText">THANK YOU</span>
+  </div>
+</div>
+
+<!-- PWA 安装提示 -->
+<div class="install-banner" id="installBanner">
+  <span>📲 添加到桌面，随时使用</span>
+  <button id="installBtn">安装</button>
+  <span class="close-x" id="closeInstall">✕</span>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  // ========== 常量 ==========
+  const TASKS_KEY = 'receipt_tasks_current';
+  const HISTORY_KEY = 'receipt_history';
+  const CONFIG_KEY = 'receipt_config';
+  const LAST_DATE_KEY = 'receipt_last_date';
+  const INSTALL_HIDE_KEY = 'receipt_install_hide';
+
+  const DEFAULT_TASKS = [
+    { id:'1', text:'晨间冥想 10 分钟', completed:false },
+    { id:'2', text:'完成项目报告', completed:false },
+    { id:'3', text:'阅读 30 页书籍', completed:false },
+    { id:'4', text:'运动 / 散步', completed:false },
+    { id:'5', text:'整理今日笔记', completed:false },
+  ];
+
+  const DEFAULT_CONFIG = {
+    title: '今日小票',
+    footer: 'THANK YOU',
+    pageBg: '#e5e7eb',
+    paperBg: '#fffdf7',
+    titleColor: '#2c3e50',
+    textColor: '#1e293b',
+    doneColor: '#10b981',
+    accentColor: '#1e293b',
+    font: "'Courier New', Courier, monospace",
+    resetHour: 2,
+    autoReset: 1
+  };
+
+  // ========== 状态 ==========
+  let tasks = [];
+  let history = {};
+  let config = { ...DEFAULT_CONFIG };
+  let viewDate = logicalDateStr();
+  let lastDate = logicalDateStr();
+  let deferredPrompt = null;
+
+  // ========== DOM ==========
+  const $ = id => document.getElementById(id);
+  const taskListEl = $('taskList');
+  const completedCountEl = $('completedCount');
+  const currentDateEl = $('currentDate');
+  const viewTag = $('viewTag');
+  const newTaskInput = $('newTaskInput');
+  const addTaskBtn = $('addTaskBtn');
+  const resetBtn = $('resetBtn');
+  const copyBtn = $('copyBtn');
+  const saveImgBtn = $('saveImgBtn');
+  const exportBtn = $('exportBtn');
+  const importBtn = $('importBtn');
+  const importFile = $('importFile');
+  const customBtn = $('customBtn');
+  const customPanel = $('customPanel');
+  const prevDayBtn = $('prevDayBtn');
+  const nextDayBtn = $('nextDayBtn');
+  const toastEl = $('toast');
+  const receiptEl = $('receipt');
+  const receiptTitle = $('receiptTitle');
+  const footerText = $('footerText');
+  const resetHint = $('resetHint');
+  const installBanner = $('installBanner');
+  const installBtn = $('installBtn');
+  const closeInstall = $('closeInstall');
+
+  // ========== 核心：逻辑日期 ==========
+  function logicalDateStr(){
+    if(!config.autoReset){
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+    const now = new Date();
+    if(now.getHours() < config.resetHour){
+      now.setDate(now.getDate() - 1);
+    }
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  }
+
+  // ========== 工具 ==========
+  let toastTimer = null;
+  function showToast(msg, dur=2000){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    if(toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>toastEl.classList.remove('show'), dur);
+  }
+
+  function formatDateDisplay(dateStr){
+    const [y,m,d] = dateStr.split('-');
+    const dt = new Date(+y, +m-1, +d);
+    const wd = ['周日','周一','周二','周三','周四','周五','周六'][dt.getDay()];
+    return `${y}-${m}-${d} ${wd}`;
+  }
+
+  function generateId(){
+    return Date.now().toString(36) + Math.random().toString(36).substr(2,6);
+  }
+
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  }
+
+  function padHour(h){
+    return String(h).padStart(2,'0') + ':00';
+  }
+
+  // ========== 存储 ==========
+  function saveAll(){
+    try {
+      localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+      localStorage.setItem(LAST_DATE_KEY, lastDate);
+    } catch(e){ console.warn('保存失败', e); }
+  }
+
+  function loadAll(){
+    try {
+      const t = localStorage.getItem(TASKS_KEY);
+      if(t) tasks = JSON.parse(t);
+      const h = localStorage.getItem(HISTORY_KEY);
+      if(h) history = JSON.parse(h);
+      const c = localStorage.getItem(CONFIG_KEY);
+      if(c) config = { ...DEFAULT_CONFIG, ...JSON.parse(c) };
+      const ld = localStorage.getItem(LAST_DATE_KEY);
+      if(ld) lastDate = ld;
+    } catch(e){ console.warn('读取失败', e); }
+
+    if(!Array.isArray(tasks) || tasks.length === 0){
+      tasks = DEFAULT_TASKS.map(t=>({...t, id:generateId()}));
+    }
+  }
+
+  // ========== 每日自动重置 ==========
+  function checkDailyRollover(){
+    if(!config.autoReset) return;
+    const logicalToday = logicalDateStr();
+    if(lastDate !== logicalToday){
+      if(tasks.length > 0){
+        history[lastDate] = JSON.parse(JSON.stringify(tasks));
+      }
+      tasks = tasks.map(t => ({
+        id: t.id,
+        text: t.text,
+        completed: false
+      }));
+      if(tasks.length === 0){
+        tasks = DEFAULT_TASKS.map(t=>({...t, id:generateId()}));
+      }
+      lastDate = logicalToday;
+      viewDate = logicalToday;
+      cleanOldHistory();
+      saveAll();
+      showToast(`已过 ${padHour(config.resetHour)}，任务已重置`);
+    }
+  }
+
+  function cleanOldHistory(){
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 90);
+    const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth()+1).padStart(2,'0')}-${String(cutoff.getDate()).padStart(2,'0')}`;
+    Object.keys(history).forEach(d => {
+      if(d < cutoffStr) delete history[d];
+    });
+  }
+
+  // ========== 渲染 ==========
+  function getViewTasks(){
+    if(viewDate === logicalDateStr()){
+      return tasks;
+    }
+    return history[viewDate] || [];
+  }
+
+  function isTodayView(){
+    return viewDate === logicalDateStr();
+  }
+
+  function render(){
+    const viewTasks = getViewTasks();
+    const readonly = !isTodayView();
+
+    currentDateEl.textContent = formatDateDisplay(viewDate);
+
+    if(readonly){
+      viewTag.textContent = '历史回看';
+      viewTag.style.color = '#ef4444';
+    } else {
+      const now = new Date();
+      if(config.autoReset && now.getHours() < config.resetHour){
+        viewTag.textContent = `今天（未到${padHour(config.resetHour)}）`;
+      } else if(!config.autoReset){
+        viewTag.textContent = '今天（不重置）';
+      } else {
+        viewTag.textContent = '今天';
+      }
+      viewTag.style.color = 'var(--accent-color)';
+    }
+
+    receiptTitle.textContent = config.title || '今日小票';
+    footerText.textContent = config.footer || 'THANK YOU';
+
+    if(config.autoReset){
+      resetHint.textContent = `点击圆圈切换状态 · 每日 ${padHour(config.resetHour)} 自动重置`;
+    } else {
+      resetHint.textContent = `点击圆圈切换状态 · 已关闭自动重置`;
+    }
+
+    if(viewTasks.length === 0){
+      taskListEl.innerHTML = `<div class="empty-state">✨ ${readonly ? '这一天没有记录' : '暂无任务'}<br><span style="font-size:.8rem;">${readonly ? '' : '添加一条待办吧'}</span></div>`;
+    } else {
+      let html = '';
+      viewTasks.forEach(task=>{
+        const cc = task.completed ? 'completed' : '';
+        const tc = task.completed ? 'completed-text' : '';
+        html += `
+          <li class="task-item" data-id="${task.id}">
+            <div class="task-check ${cc}" data-id="${task.id}" role="button" tabindex="0">${task.completed?'✓':''}</div>
+            <span class="task-text ${tc}">${escapeHtml(task.text)}</span>
+          </li>`;
+      });
+      taskListEl.innerHTML = html;
+
+      if(!readonly){
+        document.querySelectorAll('.task-check').forEach(el=>{
+          el.addEventListener('click', e=>{
+            e.stopPropagation();
+            toggleTask(el.dataset.id);
+          });
+        });
+      }
+    }
+
+    const total = viewTasks.length;
+    const completed = viewTasks.filter(t=>t.completed).length;
+    completedCountEl.textContent = `${completed} / ${total}`;
+
+    newTaskInput.disabled = readonly;
+    addTaskBtn.disabled = readonly;
+    addTaskBtn.style.opacity = readonly ? .4 : 1;
+    resetBtn.disabled = readonly;
+    resetBtn.style.opacity = readonly ? .4 : 1;
+
+    prevDayBtn.disabled = false;
+    nextDayBtn.disabled = (viewDate >= logicalDateStr());
+
+    applyTheme();
+  }
+
+  function applyTheme(){
+    const root = document.documentElement;
+    root.style.setProperty('--page-bg', config.pageBg);
+    root.style.setProperty('--paper-bg', config.paperBg);
+    root.style.setProperty('--title-color', config.titleColor);
+    root.style.setProperty('--text-color', config.textColor);
+    root.style.setProperty('--done-color', config.doneColor);
+    root.style.setProperty('--accent-color', config.accentColor);
+    root.style.setProperty('--font-main', config.font);
+    document.body.style.fontFamily = config.font;
+
+    // 更新主题色（安卓地址栏颜色）
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if(metaTheme) metaTheme.setAttribute('content', config.pageBg);
+  }
+
+  // ========== 操作 ==========
+  function toggleTask(id){
+    if(!isTodayView()) return;
+    const t = tasks.find(x=>x.id===id);
+    if(t){
+      t.completed = !t.completed;
+      saveAll();
+      render();
+    }
+  }
+
+  function addNewTask(){
+    if(!isTodayView()){ showToast('历史日期不能添加'); return; }
+    const text = newTaskInput.value.trim();
+    if(text === ''){ showToast('请输入任务内容'); return; }
+    if(text.length > 60){ showToast('请勿超过60字'); return; }
+    tasks.push({ id:generateId(), text, completed:false });
+    saveAll();
+    render();
+    newTaskInput.value = '';
+    setTimeout(()=>{ taskListEl.scrollTop = taskListEl.scrollHeight; }, 50);
+    showToast('已添加');
+  }
+
+  function resetAll(){
+    if(!isTodayView()){ showToast('历史日期不能重置'); return; }
+    if(tasks.length === 0){ showToast('暂无任务'); return; }
+    if(confirm('把所有任务标记为未完成？')){
+      tasks.forEach(t=>t.completed=false);
+      saveAll();
+      render();
+      showToast('已重置');
+    }
+  }
+
+  function copySummary(){
+    const viewTasks = getViewTasks();
+    const total = viewTasks.length;
+    const completed = viewTasks.filter(t=>t.completed).length;
+    let s = `📋 ${config.title} · ${formatDateDisplay(viewDate)}\n`;
+    s += `------------------------------\n`;
+    if(total === 0){ s += `（暂无任务）\n`; }
+    else {
+      viewTasks.forEach(t=>{ s += `${t.completed?'✅':'⏳'} ${t.text}\n`; });
+    }
+    s += `------------------------------\n`;
+    s += `已完成: ${completed} / ${total}\n`;
+    s += `—— ${config.footer} ——`;
+
+    const doCopy = navigator.clipboard && window.isSecureContext
+      ? navigator.clipboard.writeText(s)
+      : new Promise((res,rej)=>{
+          const ta = document.createElement('textarea');
+          ta.value = s; ta.style.position='fixed'; ta.style.left='-9999px';
+          document.body.appendChild(ta); ta.select();
+          try{ document.execCommand('copy'); document.body.removeChild(ta); res(); }
+          catch(e){ document.body.removeChild(ta); rej(e); }
+        });
+
+    doCopy.then(()=>showToast('已复制到剪贴板')).catch(()=>showToast('复制失败'));
+  }
+
+  function saveAsImage(){
+    if(typeof html2canvas === 'undefined'){
+      showToast('图片库加载失败，请检查网络');
+      return;
+    }
+    showToast('正在生成图片...', 3000);
+    const hideEls = [document.querySelector('.action-bar'),
+                     document.querySelector('.add-task-area'),
+                     document.querySelector('.tool-bar'),
+                     document.querySelector('.panel'),
+                     document.querySelector('.history-nav')];
+    hideEls.forEach(el=>{ if(el) el.style.visibility = 'hidden'; });
+
+    html2canvas(receiptEl, {
+      backgroundColor: config.pageBg,
+      scale: window.devicePixelRatio > 1 ? 2 : 2,
+      useCORS: true,
+      logging: false
+    }).then(canvas=>{
+      hideEls.forEach(el=>{ if(el) el.style.visibility = 'visible'; });
+      const link = document.createElement('a');
+      link.download = `${config.title}_${viewDate}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast('已保存图片');
+    }).catch(err=>{
+      hideEls.forEach(el=>{ if(el) el.style.visibility = 'visible'; });
+      console.error(err);
+      showToast('生成图片失败');
+    });
+  }
+
+  function exportData(){
+    const data = {
+      version:5,
+      exportDate:new Date().toISOString(),
+      tasks, history, config, lastDate
+    };
+    const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `小票备份_${logicalDateStr()}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('已导出备份');
+  }
+
+  function importData(file){
+    const reader = new FileReader();
+    reader.onload = e=>{
+      try {
+        const data = JSON.parse(e.target.result);
+        let newTasks, newHistory, newConfig, newLastDate;
+
+        if(Array.isArray(data)){
+          newTasks = data.map(t=>({
+            id: t.id||generateId(),
+            text: t.text||'',
+            completed: !!t.completed
+          })).filter(t=>t.text);
+          newHistory = history;
+          newConfig = config;
+          newLastDate = logicalDateStr();
+        } else if(data && typeof data === 'object'){
+          newTasks = Array.isArray(data.tasks) ? data.tasks.map(t=>({
+            id:t.id||generateId(), text:t.text||'', completed:!!t.completed
+          })).filter(t=>t.text) : [];
+          newHistory = data.history && typeof data.history === 'object' ? data.history : {};
+          newConfig = data.config ? { ...DEFAULT_CONFIG, ...data.config } : config;
+          newLastDate = data.lastDate || logicalDateStr();
+        } else {
+          showToast('文件格式错误'); return;
+        }
+
+        if(!confirm(`导入将覆盖当前数据（含历史），确定？`)) return;
+
+        tasks = newTasks.length ? newTasks : DEFAULT_TASKS.map(t=>({...t,id:generateId()}));
+        history = newHistory;
+        config = newConfig;
+        lastDate = newLastDate;
+        viewDate = logicalDateStr();
+        saveAll();
+        render();
+        loadConfigToPanel();
+        showToast(`已导入，共 ${tasks.length} 条任务`);
+      } catch(err){
+        console.error(err);
+        showToast('导入失败：文件格式错误');
+      }
+    };
+    reader.onerror = ()=>showToast('读取文件失败');
+    reader.readAsText(file);
+  }
+
+  // ========== 历史导航 ==========
+  function shiftDay(delta){
+    const [y,m,d] = viewDate.split('-').map(Number);
+    const dt = new Date(y, m-1, d);
+    dt.setDate(dt.getDate() + delta);
+    const newStr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    if(newStr > logicalDateStr()) return;
+    viewDate = newStr;
+    render();
+  }
+
+  // ========== 自定义面板 ==========
+  function loadConfigToPanel(){
+    $('cfgTitle').value = config.title;
+    $('cfgFooter').value = config.footer;
+    $('cfgPageBg').value = config.pageBg;
+    $('cfgPaperBg').value = config.paperBg;
+    $('cfgTitleColor').value = config.titleColor;
+    $('cfgTextColor').value = config.textColor;
+    $('cfgDoneColor').value = config.doneColor;
+    $('cfgAccentColor').value = config.accentColor;
+    $('cfgFont').value = config.font;
+    $('cfgResetHour').value = String(config.resetHour);
+    $('cfgAutoReset').value = config.autoReset ? '1' : '0';
+  }
+
+  function applyConfigFromPanel(){
+    config.title = $('cfgTitle').value.trim() || '今日小票';
+    config.footer = $('cfgFooter').value.trim() || 'THANK YOU';
+    config.pageBg = $('cfgPageBg').value;
+    config.paperBg = $('cfgPaperBg').value;
+    config.titleColor = $('cfgTitleColor').value;
+    config.textColor = $('cfgTextColor').value;
+    config.doneColor = $('cfgDoneColor').value;
+    config.accentColor = $('cfgAccentColor').value;
+    config.font = $('cfgFont').value;
+
+    const newHour = parseInt($('cfgResetHour').value, 10);
+    const newAuto = $('cfgAutoReset').value === '1';
+
+    const oldLogical = logicalDateStr();
+    config.resetHour = isNaN(newHour) ? 2 : newHour;
+    config.autoReset = newAuto ? 1 : 0;
+    const newLogical = logicalDateStr();
+
+    if(oldLogical !== newLogical && config.autoReset){
+      lastDate = oldLogical;
+      checkDailyRollover();
+      viewDate = logicalDateStr();
+    }
+
+    saveAll();
+    render();
+    showToast('设置已保存');
+  }
+
+  // ========== PWA 安装 ==========
+  function setupPWA(){
+    // 监听安装提示
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      // 检查是否用户之前关闭过提示
+      if(localStorage.getItem(INSTALL_HIDE_KEY) === '1') return;
+      // 已安装则不显示
+      if(window.matchMedia('(display-mode: standalone)').matches) return;
+      installBanner.classList.add('show');
+    });
+
+    installBtn.addEventListener('click', async () => {
+      if(!deferredPrompt){
+        showToast('当前浏览器不支持自动安装，请手动添加到桌面');
+        return;
+      }
+      installBanner.classList.remove('show');
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if(outcome === 'accepted'){
+        showToast('已添加到桌面');
+      }
+      deferredPrompt = null;
+    });
+
+    closeInstall.addEventListener('click', () => {
+      installBanner.classList.remove('show');
+      localStorage.setItem(INSTALL_HIDE_KEY, '1');
+    });
+
+    // 已安装后隐藏
+    window.addEventListener('appinstalled', () => {
+      installBanner.classList.remove('show');
+      deferredPrompt = null;
+      showToast('安装成功！');
+    });
+
+    // 如果是 iOS Safari，显示手动安装提示
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if(isIOS && !isStandalone && localStorage.getItem(INSTALL_HIDE_KEY) !== '1'){
+      // iOS 不能自动安装，显示提示文字
+      setTimeout(() => {
+        if(localStorage.getItem(INSTALL_HIDE_KEY) === '1') return;
+        installBanner.querySelector('span').textContent = '📲 点分享→添加到主屏幕';
+        installBtn.style.display = 'none';
+        installBanner.classList.add('show');
+      }, 3000);
+    }
+
+    // 动态注册 Service Worker（用于离线缓存）
+    if('serviceWorker' in navigator){
+      const swCode = `
+        const CACHE_NAME = 'receipt-v1';
+        const ASSETS = [
+          './',
+          'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'
+        ];
+        self.addEventListener('install', e => {
+          e.waitUntil(
+            caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS).catch(()=>{}))
+          );
+          self.skipWaiting();
+        });
+        self.addEventListener('activate', e => {
+          e.waitUntil(
+            caches.keys().then(keys => Promise.all(
+              keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+            ))
+          );
+          self.clients.claim();
+        });
+        self.addEventListener('fetch', e => {
+          e.respondWith(
+            caches.match(e.request).then(r => r || fetch(e.request).catch(()=>caches.match('./')))
+          );
+        });
+      `;
+      try {
+        const blob = new Blob([swCode], { type: 'application/javascript' });
+        const swUrl = URL.createObjectURL(blob);
+        navigator.serviceWorker.register(swUrl).catch(err => {
+          console.warn('SW 注册失败（可能是本地打开或 blob 限制）', err);
+        });
+      } catch(e){
+        console.warn('SW 创建失败', e);
+      }
+    }
+  }
+
+  // ========== 初始化 ==========
+  function init(){
+    loadAll();
+    checkDailyRollover();
+
+    setInterval(()=>{
+      if(!config.autoReset) return;
+      const logicalToday = logicalDateStr();
+      if(lastDate !== logicalToday){
+        checkDailyRollover();
+        viewDate = logicalDateStr();
+        render();
+      }
+    }, 60*1000);
+
+    render();
+    loadConfigToPanel();
+    setupPWA();
+
+    addTaskBtn.addEventListener('click', addNewTask);
+    newTaskInput.addEventListener('keypress', e=>{
+      if(e.key === 'Enter'){ e.preventDefault(); addNewTask(); }
+    });
+    resetBtn.addEventListener('click', resetAll);
+    copyBtn.addEventListener('click', copySummary);
+    saveImgBtn.addEventListener('click', saveAsImage);
+    exportBtn.addEventListener('click', exportData);
+    importBtn.addEventListener('click', ()=>importFile.click());
+    importFile.addEventListener('change', e=>{
+      const f = e.target.files[0];
+      if(f){ importData(f); importFile.value=''; }
+    });
+    customBtn.addEventListener('click', ()=>{
+      customPanel.classList.toggle('open');
+      if(customPanel.classList.contains('open')) loadConfigToPanel();
+    });
+    $('saveCustomBtn').addEventListener('click', applyConfigFromPanel);
+    $('resetCustomBtn').addEventListener('click', ()=>{
+      if(confirm('恢复默认外观？')){
+        config = { ...DEFAULT_CONFIG };
+        saveAll(); render(); loadConfigToPanel();
+        showToast('已恢复默认');
+      }
+    });
+    prevDayBtn.addEventListener('click', ()=>shiftDay(-1));
+    nextDayBtn.addEventListener('click', ()=>shiftDay(1));
+
+    window.addEventListener('storage', e=>{
+      if([TASKS_KEY,HISTORY_KEY,CONFIG_KEY,LAST_DATE_KEY].includes(e.key)){
+        loadAll(); render();
+      }
+    });
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
